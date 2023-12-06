@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE,
 
 ## Introduction
 
-This lab will take a look at (1) regularized regression models
+This lab will take a look at (1) regularized regression models (2) their corresponding hyperparameter tuning for both linear and logistic regression
 
 Note that regularization -- ridge and lasso, etc. -- can be used for **both linear and logistic regression**.
 
@@ -133,6 +133,7 @@ churn_recipe <- recipe(churn ~ ., data = mlc_train) %>%
 prep(churn_recipe) %>% bake(new_data = mlc_train)
 ```
 
+Here we want to re-code the state variables to represent regions of the US:
 
 ```{r}
 set.seed(3435)
@@ -162,6 +163,7 @@ mlc_test <- testing(mlc_split)
 mlc_fold <- vfold_cv(mlc_train, v = 10)
 ```
 
+We want to upsample our data to handle the imbalance in the levels of the outcome:
 
 ```{r}
 churn_recipe_demo <- recipe(churn ~ ., data = mlc_train) %>%
@@ -186,6 +188,7 @@ churn_recipe <- recipe(churn ~ ., data = mlc_train) %>%
 The nice thing is that by specifying a range of values for `mixture` between 0 and 1, **inclusive**, we can essentially fit both ridge, lasso, **and** a variety of elastic net models at the same time, considering all our values of `penalty` at the same time! That's what we'll do here.
 
 When using the `glmnet` engine, we also need to set a penalty to be able to fit the model. This `penalty` argument corresponds to $\lambda$ in the slides and textbook. Generally, we'll select the optimal value of $\lambda$ by tuning; its value can essentially range between \$0\$, which is equivalent to traditional linear or logistic regression, and an upper limit of positive infinity.
+
 
 ```{r}
 en_spec_hitters <- linear_reg(mixture = tune(), 
@@ -217,7 +220,6 @@ en_grid <- grid_regular(penalty(range = c(0, 1),
                         mixture(range = c(0, 1)),
                              levels = 10)
 ```
-
 
 
 ```{r}

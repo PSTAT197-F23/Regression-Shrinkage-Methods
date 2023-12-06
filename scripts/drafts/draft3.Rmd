@@ -17,35 +17,30 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This project explores the application of regularization techniques, specifically Ridge and Lasso regression, to predict Major League Baseball (MLB) player salaries based on various player statistics from the 1986 and 1987 seasons. Using the Hitters dataset, the study investigates the impact of Ridge and Lasso regression in handling multicollinearity and variable selection. The process involves data exploration, tidying, and the implementation of both Ridge and Lasso regression models. The project further delves into the integration of Principal Component Analysis (PCA) to address collinearity in predictor variables. Finally, an Elastic Net regression model is employed, combining Lasso and Ridge penalties. The hyperparameter tuning process, model selection, and the evaluation of the chosen model's performance are also discussed. This comprehensive analysis provides insights into the effectiveness of different regularization techniques in predicting MLB player salaries and serves as a valuable resource for practitioners in sports analytics and regression modeling.
 
-
+---
 
 ## Introducing Shrinkage Method
 
 
 ### Ridge Regression
 
-
 The purpose of ridge regression is to estimate the parameter $\beta$ in the linear model.
 
-
-\begin{align*}
+\[
 y = X\beta + \varepsilon, \quad \varepsilon \sim \mathcal(0, \sigma^2 I_n)
-\end{align*}
-
+\]
 
 where X is $N\times(p+1)$ real matrix with full column rank (rank = p + 1), and the first column a column of 1’s
 
 Ridge regression:
 
-
-\begin{align*}
+\[
 \hat{\beta}^{ridge} = \arg\min_{\beta} \left\{ \|y - X\beta\|_2^2 + \lambda \|\beta\|_2^2 \right\}
-\end{align*}
-
+\]
 
 where:
 
-
+\[
 \begin{align*}
 \hat{\beta}^{ridge} & : \text{Ridge regression coefficient estimates} \\
 \beta & : \text{Regression coefficient vector} \\
@@ -54,33 +49,27 @@ y & : \text{Response variable vector} \\
 \lambda & : \text{Ridge regularization parameter} \\
 \| \cdot \|_2 & : \text{L2 norm (Euclidean norm)}
 \end{align*}
-
+\]
 
 which can also be written as:
 
-
-\begin{align*}
+\[
 \hat{\beta}^{ridge} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 + \lambda(\sum_{j=1}^{p}\beta_{j}^2) \right\}
-\end{align*}
-
+\]
 
 this is equivalent to finding:
 
-
-\begin{align*}
+\[
 \hat{\beta}^{ridge} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 \right\} \quad subject \space to \quad \sum_{j=1}^{p}\beta_{j}^2 \leq t^2
-\end{align*}
-
+\]
 
 There exist an 1 to 1 correspondence between $\lambda$ and t in above formulation.
 
 Found that $\sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2$ is the sum square residual (RSS), $\lambda$ is the penalty parameter.  The L2 regularization term is added to the ordinary least squares (OLS) objective function to prevent overfitting and to handle multicollinearity among the predictor variables. No penalty for the intercept $\beta_0$.
 
-
-\begin{align*}
+\[
 \lambda \geq 0
-\end{align*}
-
+\]
 
 * if $\lambda = 0$, then the $\hat{\beta}^{ridge}$ will be ordinary least squares (OLS).
 
@@ -89,28 +78,22 @@ Found that $\sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2$ is th
 
 If the columns of X are each centered, and where there is no intercept, then the ridge estimate of $\beta$ in model $y = X\beta + \varepsilon$ minimizes a penalized least squares criterion.
 
-
-\begin{align*}
+\[
 RSS(\lambda) = (y - X\beta)^T(y - X\beta) + \lambda \beta^T \beta
-\end{align*}
+\]
 
-
-
-\begin{align*}
+\[
 \hat{\beta}^{ridge} = (X^T X + \lambda I)^{-1} X^T Y
-\end{align*}
-
-
+\]
 
 which is a linear function of Y, therefore this estimator is a linear estimator.
 
 
-![Image of Ridge regression and Lasso regression](img\ridge_lasso_regression.png)
+![Image of Ridge regression and Lasso regression](ridge_lasso_regression.png)
 
 In the picture above, p = 2 (2 parameters, not including the intercept). The $\hat{\beta}^{ridge}$ lies either on the boundary of the circle or interior to the circle.
 
 - As $\lambda \to \infty$ (or $t \to 0$), $\hat{\beta}^{ridge} \to 0$.
-
 - As $\lambda \to 0$ (or $t \to \infty$), $\hat{\beta}^{ridge} \to \hat{\beta}^{OLS}$.
 
 ---
@@ -121,15 +104,13 @@ Different from ridge regression, lasso regression is a L1 penalty approach. The 
 
 Lasso regression:
 
-
-\begin{align*}
+\[
 \hat{\beta}^{lasso} = \arg\min_{\beta} \left\{ \|y - X\beta\|_2^2 + \lambda \|\beta\|_1 \right\}
-\end{align*}
-
+\]
 
 where:
 
-
+\[
 \begin{align*}
 \hat{\beta}^{lasso} & : \text{Lasso regression coefficient estimates} \\
 \beta & : \text{Regression coefficient vector} \\
@@ -139,23 +120,19 @@ y & : \text{Response variable vector} \\
 \| \cdot \|_2 & : \text{L2 norm (Euclidean norm)} \\
 \| \cdot \|_1 & : \text{L1 norm (Manhattan norm)}
 \end{align*}
-
+\]
 
 which can also be written as:
 
-
-\begin{align*}
+\[
 \hat{\beta}^{lasso} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 + \lambda(\sum_{j=1}^{p}|\beta_{j}|) \right\}
-\end{align*}
-
+\]
 
 this is equivalent to finding:
 
-
-\begin{align*}
+\[
 \hat{\beta}^{lasso} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 \right\} \quad subject \space to \quad \sum_{j=1}^{p}|\beta_{j}| \leq t^2
-\end{align*}
-
+\]
 
 There exist an 1 to 1 correspondence between $\lambda$ and t in above formulation.
 
@@ -478,3 +455,5 @@ These final models can now be applied on our testing data sets to assess their a
 augment(final_enet_fit, new_data = hitters_test) %>%
   rmse(truth = salary, estimate = .pred)
 ```
+
+
