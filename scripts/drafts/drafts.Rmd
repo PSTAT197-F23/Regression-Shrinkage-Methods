@@ -1,0 +1,253 @@
+---
+title: "Regularized Regression"
+author: "Ryan Yee"
+output:
+    html_document:
+      toc: true
+      toc_float: true
+      code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+
+## Introduction
+
+This lab will take a look at (1) regularized regression models
+
+Note that regularization -- ridge and lasso, etc. -- can be used for **both linear and logistic regression**.
+
+### Loading Packages
+
+We load `tidymodels` for modeling functions, `ISLR` and `ISLR2` for data sets, and the `tidyverse`. We also need to load the `glmnet` package, since we'll use it as the engine for the regularized regressions.
+
+```{r}
+library(tidymodels)
+library(ISLR)
+library(ISLR2)
+library(tidyverse)
+library(glmnet)
+library(modeldata)
+library(ggthemes)
+library(janitor) # for naming conventions
+library(naniar) # to assess missing data patterns
+library(corrplot) # for a correlation plot
+library(themis) # for upsampling
+tidymodels_prefer()
+```
+
+### Data
+
+We'll be working with two data sets for this lab, one to illustrate a regression problem and one to illustrate a classification problem. Let's take a look at each one.
+
+#### Regression: Baseball salaries
+
+For regression, we'll use the `Hitters` data set; `Hitters` is included in the `ISLR` package, so we can use it once we've loaded that package. Our goal to predict baseball players' `Salary` based on several different characteristics which are included in the data set, like their number of times at bat, number of hits, division, etc.
+
+We'll turn the data set into a tibble (the `tidyverse` version of a data frame) and use `head()` to view the first few rows:
+
+```{r}
+hitters <- as_tibble(Hitters)
+head(hitters)
+```
+
+We can do that with `clean_names()`, which by default will make all columns snake case. (Snake case means all words start with lowercase letters and are separated by underscores, which makes them look_like_little_snakes.)
+
+```{r}
+hitters <- hitters %>% 
+  clean_names()
+head(hitters)
+```
+
+We start, as normal, by splitting the data into training and testing sets using stratified sampling; we'll also use *k*-fold cross-validation with $k = 10$ to fold the training set.
+
+```{r}
+set.seed(3435)
+hitters_split <- initial_split(hitters, strata = "salary", prop = 0.75)
+
+hitters_train <- training(hitters_split)
+hitters_test <- testing(hitters_split)
+
+hitters_fold <- vfold_cv(hitters_train, v = 10)
+```
+
+---
+
+We'll set up a recipe for the regression problem first.
+
+```{r}
+hitters_recipe <- recipe(salary ~ . , data = hitters_train) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_normalize(all_predictors()) %>% 
+  step_impute_linear(salary, 
+                     impute_with = imp_vars(c_hits, c_runs, crbi, c_walks, c_at_bat),
+                     skip = TRUE) %>% 
+  step_pca(hits, hm_run, runs, rbi, walks, 
+           num_comp = 1, prefix = "first_pc") %>% 
+  step_pca(years, c_hits, c_runs, crbi, c_walks, c_at_bat,
+           num_comp = 1, prefix = "second_pc")
+
+prep(hitters_recipe) %>% bake(new_data = hitters_train)
+```
+
+We normalize all the predictors first, as is generally recommended when conducting PCA, so that they are all on the same scale. We then extract two principal components, one representing all the common information in the first group of five correlated predictors and the second all the information in the second group.
+
+---
+
+#### Classification: Customer churn
+
+For classification, we'll use the `mlc_churn` data set, which is part of the `modeldata` package. It contains a simulated data set that is provided along with certain machine learning software for practice predicting customer churn. Customer churn is a specific name for customer attrition, or whether or not customers stop doing business with an entity or organization. It's generally in a business' best interest to retain as many customers as possible and minimize churn, so a model that can accurately predict when customers will stop doing business somewhere is very useful.
+
+```{r}
+mlc_churn <- modeldata::mlc_churn %>% 
+  as_tibble()
+
+mlc_churn %>% 
+  head()
+```
+
+
+We'll handle this collinearity by simply excluding one of each of these variable pairs from our recipe. This is also a good opportunity to drop `state` and `area_code`, since there are a lot of levels of each, making it a little tricky to format them for inclusion in the models. The next code chunk removes these variables from the data entirely and does the splitting and folding:
+
+```{r}
+set.seed(3435)
+mlc_churn <- mlc_churn %>% 
+  select(-c(total_day_charge, total_eve_charge, total_night_charge,
+            total_intl_charge))
+mlc_split <- initial_split(mlc_churn, strata = "churn", prop = 0.75)
+
+mlc_train <- training(mlc_split)
+mlc_test <- testing(mlc_split)
+
+mlc_fold <- vfold_cv(mlc_train, v = 10)
+```
+
+Next, let's set up the recipe for this data!
+
+```{r}
+churn_recipe <- recipe(churn ~ ., data = mlc_train) %>% 
+    step_dummy(all_nominal_predictors())
+
+prep(churn_recipe) %>% bake(new_data = mlc_train)
+```
+
+
+```{r}
+set.seed(3435)
+mlc_churn <- mlc_churn %>%
+  mutate(region = forcats::fct_collapse(state,
+                                        west = c("CA", "OR", "WA", "ID",
+                                                 "MT", "NV", "WY", "UT",
+                                                 "CO", "AZ", "NM", "AK",
+                                                 "HI"),
+                                        midwest = c("ND", "SD", "NE", "KS",
+                                                    "MN", "IA", "MO", "WI",
+                                                    "IL", "MI", "IN", "OH"),
+                                        northeast = c("ME", "VT", "NH", "MA",
+                                                      "CT", "RI", "NY", "PA",
+                                                      "NJ"),
+                                        south = c("TX", "OK", "AR", "LA",
+                                                  "KY", "TN", "MS", "AL",
+                                                  "WV", "DE", "MD", "VA",
+                                                  "NC", "SC", "GA", "FL",
+                                                  "DC"))) %>% 
+  select(-state)
+mlc_split <- initial_split(mlc_churn, strata = "churn", prop = 0.75)
+
+mlc_train <- training(mlc_split)
+mlc_test <- testing(mlc_split)
+
+mlc_fold <- vfold_cv(mlc_train, v = 10)
+```
+
+
+```{r}
+churn_recipe_demo <- recipe(churn ~ ., data = mlc_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_normalize(all_predictors()) %>% 
+  step_upsample(churn, over_ratio = 0.5, skip = FALSE)
+
+prep(churn_recipe_demo) %>% bake(new_data = mlc_train) %>% 
+  group_by(churn) %>% 
+  summarise(count = n())
+
+churn_recipe <- recipe(churn ~ ., data = mlc_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_normalize(all_predictors()) %>% 
+  step_upsample(churn, over_ratio = 1)
+```
+
+## Elastic Net Regression
+
+`parsnip` does not have a dedicated function to create a ridge regression model specification; we need to use **either** `linear_reg()` or `logistic_reg()` and set `mixture = 0` to specify a ridge model. The `mixture` argument specifies the amount of different types of regularization; `mixture = 0` specifies only ridge regularization and `mixture = 1` specifies only lasso regularization. Setting `mixture` to a value between 0 and 1 lets us use both, which results in a mixture of L1 and L2 regularization, or what is often called an "elastic net."
+
+The nice thing is that by specifying a range of values for `mixture` between 0 and 1, **inclusive**, we can essentially fit both ridge, lasso, **and** a variety of elastic net models at the same time, considering all our values of `penalty` at the same time! That's what we'll do here.
+
+When using the `glmnet` engine, we also need to set a penalty to be able to fit the model. This `penalty` argument corresponds to $\lambda$ in the slides and textbook. Generally, we'll select the optimal value of $\lambda$ by tuning; its value can essentially range between \$0\$, which is equivalent to traditional linear or logistic regression, and an upper limit of positive infinity.
+
+```{r}
+en_spec_hitters <- linear_reg(mixture = tune(), 
+                              penalty = tune()) %>%
+  set_mode("regression") %>%
+  set_engine("glmnet")
+
+en_spec_churn <- logistic_reg(mixture = tune(), 
+                              penalty = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("glmnet")
+```
+
+
+```{r}
+en_workflow_churn <- workflow() %>% 
+  add_recipe(churn_recipe) %>% 
+  add_model(en_spec_churn)
+
+en_workflow_hitters <- workflow() %>% 
+  add_recipe(hitters_recipe) %>% 
+  add_model(en_spec_hitters)
+```
+
+
+```{r}
+en_grid <- grid_regular(penalty(range = c(0, 1),
+                                     trans = identity_trans()),
+                        mixture(range = c(0, 1)),
+                             levels = 10)
+```
+
+
+
+```{r}
+tune_res_hitters <- tune_grid(
+  en_workflow_hitters,
+  resamples = hitters_fold, 
+  grid = en_grid
+)
+
+tune_res_churn <- tune_grid(
+  en_workflow_churn,
+  resamples = mlc_fold, 
+  grid = en_grid
+)
+
+tune_res_hitters
+```
+
+`autoplot()` creates a great visualization of the information about each metric across each fold for us, first for MLB then for churn:
+
+```{r}
+autoplot(tune_res_hitters)
+```
+
+```{r}
+autoplot(tune_res_churn)
+```
+
+We'll demonstrate how to look at/interpret these results for the MLB data, and then suggest that you practice interpreting the customer churn results.
+
+For the MLB data, the scale of the y-axis for both metrics is relatively small, first of all. This indicates that the resulting performance doesn't really vary drastically across any of the models we've fit. The amount of regularization, on the x-axis, is the penalty hyperparameter, which covers the range of values we specified (zero to one), and the values of mixture are represented by the different-colored lines.
+
+Overall, the models with zero percentage of lasso penalty, or the ridge regression models, do better, as indicated by the red line being consistently higher (or lower) than the others. This implies that it yields better performance to avoid reducing predictors all the way down to zero, as can happen in the case of lasso regression. Models with some non-zero proportion of lasso start to do slightly better as the penalty value increases, although still their performance is not near the level of ridge regression.
