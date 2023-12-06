@@ -1,0 +1,417 @@
+---
+title: "Aaron scripts"
+author: "Aaron Lee (3410388)"
+date: "2023-12-06"
+output:
+    html_document:
+      toc: true
+      toc_float: true
+      code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introducing Shrinkage Method
+
+### Ridge Regression
+
+The purpose of ridge regression is to estimate the parameter $\beta$ in the linear model.
+
+\[
+y = X\beta + \varepsilon, \quad \varepsilon \sim \mathcal(0, \sigma^2 I_n)
+\]
+
+where X is $N\times(p+1)$ real matrix with full column rank (rank = p+1), and the first column a column of 1’s
+
+Ridge regression:
+
+\[
+\hat{\beta}^{ridge} = \arg\min_{\beta} \left\{ \|y - X\beta\|_2^2 + \lambda \|\beta\|_2^2 \right\}
+\]
+
+where:
+
+\[
+\begin{align*}
+\hat{\beta}^{ridge} & : \text{Ridge regression coefficient estimates} \\
+\beta & : \text{Regression coefficient vector} \\
+X & : \text{Design matrix} \\
+y & : \text{Response variable vector} \\
+\lambda & : \text{Ridge regularization parameter} \\
+\| \cdot \|_2 & : \text{L2 norm (Euclidean norm)}
+\end{align*}
+\]
+
+which can also be written as:
+
+\[
+\hat{\beta}^{ridge} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 + \lambda(\sum_{j=1}^{p}\beta_{j}^2) \right\}
+\]
+
+this is equivalent to finding:
+
+\[
+\hat{\beta}^{ridge} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 \right\}
+\]
+
+subject to $\sum_{j=1}^{p}\beta_{j}^2 \leq t^2$, there exist an 1 to 1 correspondence between $\lambda$ and t in above formulation.
+
+Found that $\sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2$ is the sum square residual (RSS), $\lambda$ is the penalty parameter.  The L2 regularization term is added to the ordinary least squares (OLS) objective function to prevent overfitting and to handle multicollinearity among the predictor variables. No penalty for the intercept $\beta_0$.
+
+\[
+\lambda \geq 0
+\]
+
+* if $\lambda = 0$, then the $\hat{\beta}^{ridge}$ will be ordinary least squares (OLS).
+* if $\lambda \to \infty$, the penalty parameter will shrink all coefficient estimates closer to zero vector. (except intercept $\beta_0$)
+
+
+If the columns of X are each centered, and where there is no intercept, then the ridge estimate of $\beta$ in model $y = X\beta + \varepsilon$ minimizes a penalized least squares criterion.
+
+\[
+RSS(\lambda) = (y - X\beta)^T(y - X\beta) + \lambda \beta^T \beta
+\]
+
+\[
+\hat{\beta}^{ridge} = (X^T X + \lambda I)^{-1} X^T Y
+\]
+
+which is a linear function of Y, therefore this estimator is a linear estimator.
+
+
+![Image of Ridge regression and Lasso regression](ridge_lasso_regression.png)
+
+In the picture above, p = 2 (2 parameters, not including the intercept). The $\hat{\beta}^{ridge}$ lies either on the boundary of the circle or interior to the circle.
+
+- As $\lambda \to \infty$ (or $t \to 0$), $\hat{\beta}^{ridge} \to 0$.
+- As $\lambda \to 0$ (or $t \to \infty$), $\hat{\beta}^{ridge} \to \hat{\beta}^{OLS}$.
+
+### Lasso Regression
+
+Different from ridge regression, lasso regression is a L1 penalty approach. The purpose is also to estimate $\beta$ in linear model. Notable, lasso also does variable selection.
+
+Lasso regression:
+
+\[
+\hat{\beta}^{lasso} = \arg\min_{\beta} \left\{ \|y - X\beta\|_2^2 + \lambda \|\beta\|_1 \right\}
+\]
+
+where:
+
+\[
+\begin{align*}
+\hat{\beta}^{lasso} & : \text{Lasso regression coefficient estimates} \\
+\beta & : \text{Regression coefficient vector} \\
+X & : \text{Design matrix} \\
+y & : \text{Response variable vector} \\
+\lambda & : \text{Lasso regularization parameter} \\
+\| \cdot \|_2 & : \text{L2 norm (Euclidean norm)} \\
+\| \cdot \|_1 & : \text{L1 norm (Manhattan norm)}
+\end{align*}
+\]
+
+which can also be written as:
+
+\[
+\hat{\beta}^{lasso} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 + \lambda(\sum_{j=1}^{p}|\beta_{j}|) \right\}
+\]
+
+this is equivalent to finding:
+
+\[
+\hat{\beta}^{lasso} = \arg\min_{\beta} \left\{ \sum_{i=1}^{N}(y_i - \beta_0 - \sum_{j=1}^{p}x_{ij}\beta_j)^2 \right\}
+\]
+
+subject to $\sum_{j=1}^{p}|\beta_{j}| \leq t^2$, there exist an 1 to 1 correspondence between $\lambda$ and t in above formulation.
+
+The different between ridge regression and lasso regression is that ridge regression never set parameter to 0, yet lasso regression does.
+
+## Loading Packages
+
+```{r, message=FALSE}
+library(tidymodels)
+library(ISLR) # load  Major League Baseball Data from the 1986 and 1987 season
+library(ISLR2)
+library(tidyverse)
+library(glmnet)
+library(modeldata)
+library(ggthemes)
+library(janitor) # for naming conventions
+library(naniar) # to assess missing data patterns
+library(corrplot) # for a correlation plot
+library(themis) # for upsampling
+library(dplyr)
+library(tidyr)
+tidymodels_prefer()
+```
+
+For regression, we'll use the `Hitters` data set; `Hitters` is included in the `ISLR` package. Our goal to predict baseball players' `Salary` based on several different characteristics which are included in the data set, like their number of times at bat, number of hits, division, etc.
+
+## Exploring our data
+
+The Hitters data set includes the Major League Baseball (MLB) Data from the 1986 and 1987 seasons. In this data frame, there are 322 observations (rows) of major league players with 20 variables (columns).
+
+- `AtBat`: The number of times a player at bat in 1986 season.
+- `Hits`: The number of a player hits in 1986 season.
+- `HmRun`: The number of Home runs in 1986 season.
+- `Runs`: The number of runs in 1986 season.
+- `RBI`: The number of runs batted in 1986 season.
+- `Walks`: The number of walks in 1986 season.
+- `Years`: The number of years the player stayed in the major leagues.
+- `CAtBat`: The number of times at bat during career.
+- `CHits`: The number of hits during career.
+- `CHmRun`: The number of home runs during career.
+- `CRuns`: The number of runs during career.
+- `CRBI`: The number of runs batted in during career.
+- `CWalks`: The number of walks during career.
+- `League`: A factor with levels A and N indicating player's league at the end of 1986.
+- `Division`: A factor with levels E and W indicating player's division at the end of 1986.
+- `PutOuts`: The number of put outs in 1986 season.
+- `Assists`: The number of assists in 1986 season.
+- `Errors`: The number of errors in 1986 season.
+- `Salary`: 1987 annual salary on opening day in thousands of dollars.
+- `NewLeague`: A factor with levels A and N indicating player's league at the beginning of 1987.
+
+
+## Tidying the Data
+
+```{r}
+hitters <- as_tibble(Hitters)
+head(hitters)
+hitters <- hitters %>% 
+  clean_names()
+head(hitters)
+```
+
+Here we use the the `clean_names()` function, comparing before and after using this function, we would found that the column name have became at lot more neat (the column name of the dataset are likely to be transformed into lowercase, and the dots or space are replaced with underscores). Which shows that `clean_names()` is useful because it makes the column names more standardized and easier to work with. 
+
+```{r}
+set.seed(123)
+hitters_split <- initial_split(hitters, strata = "salary", prop = 0.8)
+
+hitters_train <- training(hitters_split) # training data set
+hitters_test <- testing(hitters_split) # testing data set
+
+# Create 10-fold cross-validation splits
+hitters_fold <- vfold_cv(hitters_train, v = 10) 
+```
+
+Now visualizing the missingness within the data:
+
+```{r}
+vis_miss(hitters)
+```
+
+Now, we found that there are missing data, we could use function `na.omit()` to remove the observation with missing value.
+
+```{r}
+Hitters_clear <- na.omit(hitters)
+vis_miss(Hitters_clear)
+```
+
+---
+
+## Perform Ridge & Lasso regression
+
+Our goal to predict baseball players’ Salary using ridge regression and lasso regression based on several different characteristics which are included in the data set, like their number of times at bat, number of hits, division, etc.
+
+```{r}
+# use to produce a matrix corresponding to the predictor variables.
+x <- model.matrix(salary~., Hitters_clear)[,-1] # removing the intercept
+y <- Hitters_clear$salary # response variable: the salary
+```
+
+```{r}
+# Ridge Regression
+grid <- 10^seq(10, -2, length = 100)
+ridge_mod <- glmnet(x, y, alpha = 0, lambda = grid)
+```
+
+By default, the `glmnet()` function performs ridge regression for an automatically
+selected range of $\lambda$ values. However, here we have chosen to implement
+the function over a grid of values ranging from $\lambda = 10^{10}$ to $\lambda = 10^{-2}$, essentially covering the full range of scenarios from the null model ($\lambda$ very large) containing only the intercept, to the least squares fit ($\lambda$ = 0). 
+
+The variables in `glmnet()` function:
+
+lambda: the range of lambda value
+
+alpha: determining what type of model is fitting.
+- alpha = 1: showing the lasso regression model is fitting (the default value)
+- alpha = 0: showing the ridge regression model is fitting
+
+```{r}
+ridge_mod$lambda[70] # displaying the 70th lambda value
+coef(ridge_mod)[,70] # displaying coefficients 
+sum(coef(ridge_mod)[-1,70]^2) # Calculate L2 norm squared
+```
+
+```{r}
+ridge_mod$lambda[60] #Display 60th lambda value
+coef(ridge_mod)[,60] # Display coefficients
+sum(coef(ridge_mod)[-1,60]^2) # Calculate L2 norm squared
+```
+
+Comparing 60th $\lambda$ value and 70th $\lambda$ value. We can observe that the L2 norm squared of the coefficients decreases when lambda value increases.
+
+Here, we use `predict()` function:
+
+```{r}
+# defined for glmnet output
+pred <- predict(object = ridge_mod, newx = x)
+```
+
+Employing cross-validation using the `cv.glmnet()` function to select the optimal tuning parameter.
+
+Instead of arbitrarily selecting a value for $\lambda$, a more robust approach involves employing cross-validation to systematically determine the optimal tuning parameter. This can be accomplished through the utilization of the built-in cross-validation function, `cv.glmnet()`. By default, the function conducts 10-fold cross-validation; however, this setting can be modified through the use of the appropriate function argument.
+
+```{r}
+set.seed(123) # set seed.
+cv.out.ridge <- cv.glmnet(x, y, alpha = 0)
+plot(cv.out.ridge)
+abline(v = log(cv.out.ridge$lambda.min), col="red", lwd=3, lty=2)
+```
+
+```{r}
+# getting the lambda with the least MSE
+bestlam <- cv.out.ridge$lambda.min
+bestlam
+log(bestlam) # where the red line is.
+```
+
+```{r}
+out <- glmnet(x,y,alpha=0)
+reg_coef <- predict(out,type="coefficients",s=bestlam)[1:20,]
+reg_coef
+```
+
+The model resulting from ridge regression is deemed optimal. It is noteworthy that none of the coefficients within this model attain a value of zero. It is imperative to acknowledge that ridge regression does not inherently facilitate variable selection.
+
+---
+
+```{r}
+# Lasso Regression
+grid <- 10^seq(10, -2, length = 100)
+lasso.mod <- glmnet(x, y, alpha=1, lambda=grid) # alpha=1, showing lasso regression
+plot(lasso.mod, xvar="lambda", label = TRUE)
+```
+
+Through the graph above, we can observe that as the x-axis (Log Lambda) goes right, which indicates that the value of $\lambda$ increases, the coefficients gradually converge to zero. Some of the coefficient will be exactly zero, because lasso regression does variable selection.
+
+
+```{r}
+set.seed(123) # set seed
+cv.out.lasso <- cv.glmnet(x, y, alpha = 1)
+plot(cv.out.lasso)
+abline(v = log(cv.out.lasso$lambda.min), col="red", lwd=3, lty=2)
+```
+
+```{r}
+# getting the lambda with the least MSE
+bestlam <- cv.out.lasso$lambda.min
+bestlam
+log(bestlam) # where the red line is
+```
+
+```{r}
+out <- glmnet(x,y,alpha=1,lambda=grid)
+lasso_coef <- predict(out,type="coefficients",s=bestlam)[1:20,]
+lasso_coef
+predict(out,type="coefficients",s=0)[1:20,] # compare when lambda = 0
+```
+
+---
+
+## Fitting the Model
+
+```{r, warning=FALSE}
+hitters_train %>% 
+  select(is.numeric) %>% # selecting numeric columns
+  cor(use = "pairwise.complete.obs") %>% # handling missing data in Salary
+  corrplot(type = "lower", diag = FALSE) # printing lower half of matrix
+```
+
+Through the visualization of the correlation matrix depicted above, robust positive linear correlations show among variables such as `years`, `c_hits`, `c_runs`, `crbi`, and `c_walks`. Similarly, substantial positive correlations are observed among `at_bat`, `hits`, `runs`, `rbi`, and `walks`. To mitigate the collinearity evident in these relationships, the introduction of the step_pca() procedure will be considered.
+
+```{r}
+hitters_recipe <- recipe(salary ~ . , data = hitters_train) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_normalize(all_predictors()) %>% 
+  step_impute_linear(salary, 
+                     impute_with = imp_vars(c_hits, c_runs, crbi, c_walks, 
+                                            c_at_bat), skip = TRUE) %>% 
+  step_pca(hits, hm_run, runs, rbi, walks, 
+           num_comp = 1, prefix = "first_pc") %>% 
+  step_pca(years, c_hits, c_runs, crbi, c_walks, c_at_bat,
+           num_comp = 1, prefix = "second_pc")
+
+prep(hitters_recipe) %>% bake(new_data = hitters_train)
+```
+
+First, we make sure to normalize all the predictors, which is usually a good idea when doing PCA, so that they're on a level playing field. After that, we pick out two principal components. The first one captures all the shared info from the first bunch of five correlated predictors, and the second one does the same for the second bunch.
+
+### Elastic Net Regression
+
+Elastic Net regression is a regularization technique that combines both L1 (Lasso) and L2 (Ridge) regularization penalties in the linear regression model. In other words, Elastic Net incorporates both the absolute values of the coefficients (L1 penalty) and the squared values of the coefficients (L2 penalty) in the optimization objective. The mixture argument specifies the amount of different types of regularization; `mixture` = 0 specifies only ridge regularization and `mixture` = 1 specifies only lasso regularization. Setting mixture to a value between 0 and 1, which results in a mixture of L1 and L2 regularization, or what is often called an "elastic net."
+
+```{r}
+# Define the model specifications
+enet_spec_hitters <- linear_reg(penalty = tune(), mixture = tune()) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+enet_spec_hitters
+
+# Set up the parameter grids
+param_grid_enet <- grid_regular(penalty(range = c(0, 1), trans = identity_trans()) , 
+                                mixture(range = c(0, 1)), levels = 10)
+
+# Set up the workflows
+workflow_enet <- workflow() %>%
+  add_recipe(hitters_recipe) %>%
+  add_model(enet_spec_hitters)
+```
+
+By using the function `grid_regular()`, which creates a grid of evenly spaced parameter values. The next step, using the `penalty()` function to identify the parameter and define the range within the grid we intend to explore. Using `trans = identity_trans()` to tell R to use the exact values that we specified, from 0 to 1. Setting the levels to 10.
+
+#### Hyperparameter Tuning
+
+```{r}
+tune_res_hitters <- tune_grid(
+  workflow_enet,
+  resamples = hitters_fold, 
+  grid = param_grid_enet
+)
+```
+
+```{r}
+autoplot(tune_res_hitters)
+```
+
+
+#### Model Selection
+
+```{r}
+(enet_hitters_metrics <- collect_metrics(tune_res_hitters))
+show_best(tune_res_hitters, metric = "rmse")
+(best_enet <- select_by_one_std_err(tune_res_hitters, desc(penalty), desc(mixture),metric = "rmse"))
+```
+
+#### Fit chosed model
+
+```{r}
+# Finalize enet model
+final_enet_wf <- finalize_workflow(workflow_enet, best_enet)
+final_enet_wf
+final_enet_fit <- fit(final_enet_wf, hitters_train)
+# final_enet_fit
+```
+
+```{r}
+# enet model
+augment(final_enet_fit, new_data = hitters_test) %>%
+  rmse(truth = salary, estimate = .pred)
+```
+
+
+
