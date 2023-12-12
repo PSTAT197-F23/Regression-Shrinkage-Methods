@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Abstract
 
-This project explores the application of regularization techniques, specifically Ridge and Lasso regression, to predict Major League Baseball (MLB) player salaries based on various player statistics from the 1986 and 1987 seasons. Using the Hitters dataset, the study investigates the impact of Ridge and Lasso regression in handling multicollinearity and variable selection. The process involves data exploration, tidying, and the implementation of both Ridge and Lasso regression models. The project further delves into the integration of Principal Component Analysis (PCA) to address collinearity in predictor variables. Finally, an Elastic Net regression model is employed, combining Lasso and Ridge penalties. The hyperparameter tuning process, model selection, and the evaluation of the chosen model's performance are also discussed. This comprehensive analysis provides insights into the effectiveness of different regularization techniques in predicting MLB player salaries and serves as a valuable resource for practitioners in sports analytics and regression modeling.
+This project explores the application of regularization techniques, specifically Ridge and Lasso regression, to predict Major League Baseball (MLB) player salaries based on various player statistics from the 1986 and 1987 seasons. Using the Hitters dataset, the study investigates the impact of Ridge and Lasso regression in handling multicollinearity and variable selection. The process involves data exploration, tidying, and the implementation of both Ridge and Lasso regression models. The project further delves into the integration of Principal Component Analysis (PCA) to address collinearity in predictor variables. Finally, an Elastic Net regression model is employed, combining Lasso and Ridge penalties. The hyperparameter tuning process, model selection, and the evaluation of the chosen model's performance are also discussed. This comprehensive analysis provides insights into the effectiveness of different regularization techniques in statistical modeling.
 
 
 
@@ -478,3 +478,16 @@ These final models can now be applied on our testing data sets to assess their a
 augment(final_enet_fit, new_data = hitters_test) %>%
   rmse(truth = salary, estimate = .pred)
 ```
+
+
+#### Learn about Shrinkage Methods
+
+- https://www.youtube.com/watch?v=lLlG5xkyqIA
+
+- https://busigence.com/blog/shrinkage-methods-in-linear-regression/
+
+#### Learn about Elastic Net Regression
+
+- https://www.youtube.com/watch?v=1dKRdX9bfIo
+
+- https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html
